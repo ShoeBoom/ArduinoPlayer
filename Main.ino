@@ -159,9 +159,9 @@ int translateIR() {
   }
 }
 
-string translateLCD(int buttonID) {
-  return 'hi me';
-}
+// string translateLCD(int buttonID) {
+//   return 'hi me';
+// }
 
 void setup() {
   irrecv.enableIRIn();

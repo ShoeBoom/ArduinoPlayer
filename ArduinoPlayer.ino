@@ -1,78 +1,46 @@
-/*
-Detects is a signal is being sent.
-
-parms:
-irrecv: is the IRrecv
-current: current song buttonID
-
-
-IF no signal is dected or invalid button is pressed: return 0
-
-IF 1 is pressed: return 1
-IF 2 is pressed: return 2
-...
-IF 8 is pressed: return 8
-IF 9 is pressed: return 9
-
-
-IF Volume+ is pressed: return 10
-IF Volume- is pressed: return 11
-IF POWER is pressed: return 12
-IF ZERO is pressed: return 13
-
-IF next is pressed: return next song buttonID
-IF current == 9:
-return 1
-else:
-return ++current
-
-IF previous is pressed: return previous song buttonID
-IF current == 1:
-return 9
-else:
-return --current
-*/
+#include <NewTone.h>
 
 #include <IRremote.h>
 #include <LiquidCrystal.h>
 #include <WString.h>
-#define speakerOut 13
-#define MAX_VOLUME 255
+#include <elapsedMillis.h>
+#include "pitches.h"
 
 int receiver = 6;  // IR reciver
-const int rs = 7, en = 8, d4 = 9, d5 = 10, d6 = 11, d7 = 12;
+
+int melody[9][56] = {
+    {NOTE_C5, NOTE_D5, NOTE_E5, NOTE_F5, NOTE_G5, NOTE_A5, NOTE_B5, NOTE_C6},
+    {NOTE_C6, NOTE_B5, NOTE_A5, NOTE_G5, NOTE_F5, NOTE_E5, NOTE_D5, NOTE_C5},
+    {NOTE_C4,  NOTE_C5,  NOTE_A3,  NOTE_A4,  NOTE_AS3, NOTE_AS4, 0,
+     0,        NOTE_C4,  NOTE_C5,  NOTE_A3,  NOTE_A4,  NOTE_AS3, NOTE_AS4,
+     0,        0,        NOTE_F3,  NOTE_F4,  NOTE_D3,  NOTE_D4,  NOTE_DS3,
+     NOTE_DS4, 0,        0,        NOTE_F3,  NOTE_F4,  NOTE_D3,  NOTE_D4,
+     NOTE_DS3, NOTE_DS4, 0,        0,        NOTE_DS4, NOTE_CS4, NOTE_D4,
+     NOTE_CS4, NOTE_DS4, NOTE_DS4, NOTE_GS3, NOTE_G3,  NOTE_CS4, NOTE_C4,
+     NOTE_FS4, NOTE_F4,  NOTE_E3,  NOTE_AS4, NOTE_A4,  NOTE_GS4, NOTE_DS4,
+     NOTE_B3,  NOTE_AS3, NOTE_A3,  NOTE_GS3, 0,        0,        0},
+    {NOTE_E4, NOTE_G4, NOTE_A4, NOTE_A4, 0,       NOTE_A4, NOTE_B4, NOTE_C5,
+     NOTE_C5, 0,       NOTE_C5, NOTE_D5, NOTE_B4, NOTE_B4, 0,       NOTE_A4,
+     NOTE_G4, NOTE_A4, 0}};
 
 /*-----( Declare objects )-----*/
 IRrecv irrecv(receiver);  // create instance of "irrecv"
 decode_results results;   // create instance of "decode_results"
-LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
+LiquidCrystal lcd(7, 8, 9, 10, 11, 12);
 int current = 1;
-int volume = MAX_VOLUME;
 bool power = true;
-bool muted = false;
-int savedVolume = MAX_VOLUME;
-
-void playSong() {
-  
-}
-
-double getVolumeForLCD() { return (volume / (double) MAX_VOLUME) * 100.00; }
 
 void powerOFF() { lcd.clear(); }
 
-void IRdetect() {
-  if (irrecv.decode(&results)) {
-    translateIR();
-    irrecv.resume();
-  }
-}
+String getTime12h() { return "01:50 PM"; }
 
-void translateIR() {
+void changeRemote() {
   switch (results.value) {
     case 0xFFA25D:
       // POWER
       power = !power;
       powerOFF();
+      noNewTone(5);
       break;
     case 0xFF22DD:
       // FAST BACK
@@ -81,6 +49,7 @@ void translateIR() {
       } else {
         --current;
       }
+      noNewTone(5);
       break;
     case 0xFFC23D:
       // FAST FORWARD
@@ -89,72 +58,75 @@ void translateIR() {
       } else {
         ++current;
       }
+      noNewTone(5);
       break;
     case 0xFF629D:
       // VOl +
-      if (volume != 255) {
-        volume += 10;
-      }
+      // if (volume != 255) {
+      //   volume += 10;
+      // }
       break;
     case 0xFFA857:
       // VOL-
-      if (volume != 0) {
-        volume -= 10;
-      }
+      // if (volume != 0) {
+      //   volume -= 10;
+      // }
       break;
     case 0xFF6897:
       // ZERO
       current = 0;
+      noNewTone(5);
       break;
     case 0xFF30CF:
       // 1
       current = 1;
+      noNewTone(5);
       break;
     case 0xFF18E7:
       // 2
       current = 2;
+      noNewTone(5);
       break;
     case 0xFF7A85:
       // 3
       current = 3;
+      noNewTone(5);
       break;
     case 0xFF10EF:
       // 4
       current = 4;
+      noNewTone(5);
       break;
     case 0xFF38C7:
       // 5
       current = 5;
+      noNewTone(5);
       break;
     case 0xFF5AA5:
       // 6
       current = 6;
+      noNewTone(5);
       break;
     case 0xFF42BD:
       // 7
       current = 7;
+      noNewTone(5);
       break;
     case 0xFF4AB5:
       // 8
       current = 8;
+      noNewTone(5);
       break;
     case 0xFF52AD:
       // 9
       current = 9;
+      noNewTone(5);
       break;
     case 0xFFFFFFFF:
       // REPEAT
       break;
     case 0xFFE21D:
       // FUNC/STOP
-      if (!muted){
-        savedVolume = volume;
-        volume = 0;
-      }else{
-        volume = savedVolume;
-      }
-
-      muted = !muted;
       break;
     case 0xFF906F:
       // UP
@@ -177,7 +149,7 @@ void translateIR() {
   }
 }
 
-String translateSONG() {
+String getSongName() {
   switch (current) {
     case 0:
       return "UNNAMED_SONG: electric boogaloo";
@@ -186,7 +158,7 @@ String translateSONG() {
       return "UNNAMED_SONG_1";
       break;
     case 2:
-      return "UNNAMED_SONG_2";
+      return "Mario Underworld";
       break;
     case 3:
       return "UNNAMED_SONG_3";
@@ -212,18 +184,45 @@ String translateSONG() {
   }
 }
 
-String translateLCD() { return "Volume: " + String(getVolumeForLCD()); }
+void IRdetect() {
+  if (irrecv.decode(&results)) {
+    changeRemote();
+    irrecv.resume();
+  }
+}
 
 void updateLCD() {
-  if (power){
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print(translateSONG());
-  lcd.setCursor(0, 1);
-  lcd.print(translateLCD());
-  delay(10);
+  if (power) {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print(getSongName());
+    lcd.setCursor(0, 1);
+    lcd.print(getTime12h());
+    delay(100);
   }
-  
+}
+
+void customDelay(unsigned int interval) {  // may be off by 10 ms. Only use
+                                           // while you need to update lcd and
+                                           // volme during delay
+  elapsedMillis timeElapsed;
+  while (timeElapsed < interval) {
+    IRdetect();
+    updateLCD();
+  }
+}
+
+void playsong() {
+  for (int thisNote = 0; thisNote < 8; thisNote++) {
+    // pin8 output the voice, every scale is 0.5 sencond
+    if (melody[current - 1][thisNote] == 0) {
+      break;
+    }
+    NewTone(5, melody[current - 1][thisNote], 500);
+
+    // Output the voice after several minutes
+    customDelay(1000);
+  }
 }
 
 void setup() {
@@ -234,5 +233,5 @@ void setup() {
 void loop() {
   IRdetect();
   updateLCD();
-  playSong();
+  playsong();
 }

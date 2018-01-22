@@ -1,6 +1,3 @@
-// #include <Time.h>
-// #include <TimeLib.h>
-
 #include <IRremote.h>
 #include <LiquidCrystal.h>
 #include <NewTone.h>
@@ -9,37 +6,45 @@
 #include "SR04.h"
 #include "pitches.h"
 
-// TODO: set Ultrasonic pins
-// #define TRIG_PIN 12
-#define BUZZER_PIN 5
-// #define ECHO_PIN 11
+#define TRIG_PIN 5
+#define ECHO_PIN 13
 
-// #define MAX_FREQUENCY 4978
-#define VISUILIZER_MAX_FREQUENCY 1000.00
-#define NUMBER_OF_LEDS 8
+#define BUZZER_PIN A0
 
-// ULTRASONIC variable
-// SR04 sr04 = SR04(ECHO_PIN, TRIG_PIN);
-// long distance;
+#define RECEIVER_PIN 6  // pin for the IR reciver
+
+#define VISUALIZER_MAX_FREQUENCY \
+  1000.00                 // frequency needed to turn on all leds
+#define NUMBER_OF_LEDS 8  // total number of leds used for the visualizer
 
 // pins for 74HC595
-int latchPin = 3;  // (11) ST_CP [RCK] on 74HC595
-int clockPin = 4;  // (9) SH_CP [SCK] on 74HC595
-int dataPin = 2;   // (12) DS [S1] on 74HC595
+#define LATCH_PIN 3  // ST_CP [RCK] on 74HC595
+#define CLOCK_PIN 4  // SH_CP [SCK] on 74HC595
+#define DATA_PIN 2   // DS [S1] on 74HC595
 
-int receiver = 6;  // IR reciver
+// ULTRASONIC variable
+SR04 sr04 = SR04(ECHO_PIN, TRIG_PIN);
+long distance;
 
-IRrecv irrecv(receiver);  // create instance of "irrecv"
-decode_results results;   // create instance of "decode_results"
+IRrecv irrecv(RECEIVER_PIN);  // create instance of "irrecv"
+decode_results results;       // create instance of "decode_results"
+
 // LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 LiquidCrystal lcd(7, 8, 9, 10, 11, 12);
+
+// Music Player State variables
 int current = 1;
 bool power = true;
-// time_t t = now();
 
+// Songs
 int melody[9][56] = {
+    // test song
     {NOTE_C5, NOTE_D5, NOTE_E5, NOTE_F5, NOTE_G5, NOTE_A5, NOTE_B5, NOTE_C6},
+
+    // test song reverse
     {NOTE_C6, NOTE_B5, NOTE_A5, NOTE_G5, NOTE_F5, NOTE_E5, NOTE_D5, NOTE_C5},
+
+    // Mario Underworld
     {NOTE_C4,  NOTE_C5,  NOTE_A3,  NOTE_A4,  NOTE_AS3, NOTE_AS4, 0,
      0,        NOTE_C4,  NOTE_C5,  NOTE_A3,  NOTE_A4,  NOTE_AS3, NOTE_AS4,
      0,        0,        NOTE_F3,  NOTE_F4,  NOTE_D3,  NOTE_D4,  NOTE_DS3,
@@ -48,41 +53,53 @@ int melody[9][56] = {
      NOTE_CS4, NOTE_DS4, NOTE_DS4, NOTE_GS3, NOTE_G3,  NOTE_CS4, NOTE_C4,
      NOTE_FS4, NOTE_F4,  NOTE_E3,  NOTE_AS4, NOTE_A4,  NOTE_GS4, NOTE_DS4,
      NOTE_B3,  NOTE_AS3, NOTE_A3,  NOTE_GS3, 0,        0,        0},
+
+    // Pirates of the Caribbean
     {NOTE_E4, NOTE_G4, NOTE_A4, NOTE_A4, 0, NOTE_A4, NOTE_B4, NOTE_C5, NOTE_C5,
      0, NOTE_C5, NOTE_D5, NOTE_B4, NOTE_B4, 0, NOTE_A4, NOTE_G4, NOTE_A4, 0}};
 
+// Power off the lcd
 void powerOFF() { lcd.clear(); }
 
-
-// TODO: test and fix ultrasonic func working
-// void playUltrasonic() {
-//   distance = sr04.Distance();
-//   int frequency;
-//   while (distance < 10) {
-//     noNewTone(BUZZER_PIN);
-//     frequency = static_cast<int>((distance / 10.00) * 5000);
-//     NewTone(BUZZER_PIN, frequency, 100);
-//     visuilizerPlayer(frequency);
-//   }
-//   customDelay(100);
-// }
+// takes input from the distance recived from the ultrasonic sensor and playes a
+// frequency based on that
+void playUltrasonic() {
+  distance = sr04.Distance();  // get distance in cm
+  int frequency;
+  checkForChange();  // check if a button is pressed and then update the lcd
+  if (distance < 50) {
+    noNewTone(BUZZER_PIN);
+    frequency = static_cast<int>(
+        (distance / 50.00) *
+        5000);  // get frequency as a percentage of (distance/max distance)
+    NewTone(BUZZER_PIN, frequency, 100);
+    visualizerPlayer(frequency);
+  } else {
+    visualizerPlayer(50);
+  }
+  customDelay(100);
+}
 
 byte leds;
 
-void visuilizerPlayer(int frequency) {
+void visualizerPlayer(int frequency) {
   leds = 0;
-  frequency = (frequency < VISUILIZER_MAX_FREQUENCY)
-                  ? static_cast<int>((frequency / VISUILIZER_MAX_FREQUENCY) *
-                                     NUMBER_OF_LEDS)
-                  : NUMBER_OF_LEDS;
-  for (int i = 0; i < frequency; i++) {
+  int numberOfLedsOn =
+      (frequency < VISUALIZER_MAX_FREQUENCY)
+          ? static_cast<int>((frequency / VISUALIZER_MAX_FREQUENCY) *
+                             NUMBER_OF_LEDS)
+          : NUMBER_OF_LEDS;  // get nummber of leds to turn on from a percentage
+                             // of frequency (frequency/max frequency)
+  for (int i = 0; i < numberOfLedsOn; i++) {
+    checkForChange();
     bitSet(leds, i);
-    digitalWrite(latchPin, LOW);
-    shiftOut(dataPin, clockPin, LSBFIRST, leds);
-    digitalWrite(latchPin, HIGH);
+    digitalWrite(LATCH_PIN, LOW);
+    shiftOut(DATA_PIN, CLOCK_PIN, LSBFIRST, leds);
+    digitalWrite(LATCH_PIN, HIGH);
   }
 }
 
+// make state changes based on IR input
 void changeRemote() {
   switch (results.value) {
     case 0xFFA25D:
@@ -111,15 +128,9 @@ void changeRemote() {
       break;
     case 0xFF629D:
       // VOl +
-      // if (volume != 255) {
-      //   volume += 10;
-      // }
       break;
     case 0xFFA857:
       // VOL-
-      // if (volume != 0) {
-      //   volume -= 10;
-      // }
       break;
     case 0xFF6897:
       // ZERO
@@ -198,22 +209,23 @@ void changeRemote() {
   }
 }
 
-String getSongName() {
-  switch (current) {
+// get song name depending on the input int
+String getSongName(int songNumber) {
+  switch (songNumber) {
     case 0:
       return "Custom Song";
       break;
     case 1:
-      return "UNNAMED_SONG_1";
+      return "test 1";
       break;
     case 2:
-      return "Mario Underworld";
+      return "test reverse";
       break;
     case 3:
-      return "UNNAMED_SONG_3";
+      return "Mario Underworld";
       break;
     case 4:
-      return "UNNAMED_SONG_4";
+      return "Pirates of the Caribbean";
       break;
     case 5:
       return "UNNAMED_SONG_5";
@@ -233,6 +245,7 @@ String getSongName() {
   }
 }
 
+// check for IR input
 void IRdetect() {
   if (irrecv.decode(&results)) {
     changeRemote();
@@ -240,38 +253,43 @@ void IRdetect() {
   }
 }
 
+// update LCD display
 void updateLCD() {
   if (power) {
     lcd.clear();
     lcd.setCursor(0, 0);
-    lcd.print(getSongName());
-    delay(100);
+    lcd.print(getSongName(current));
+    delay(10);
   }
 }
 
-void customDelay(unsigned int interval) {  // may be off by 10 ms. Only use
-                                           // while you need to update lcd and
-                                           // volme during delay
+void customDelay(unsigned int interval) {  // Only use while you need to update
+                                           // lcd and volme during delay
   elapsedMillis timeElapsed;
   while (timeElapsed < interval) {
-    IRdetect();
-    updateLCD();
+    checkForChange();
   }
 }
 
-void playsong() {
+// check is a change has been made to the state
+void checkForChange() {
+  IRdetect();
+  updateLCD();
+}
+
+// function to play the song based in input int
+void playsong(int songNumber) {
   int currentNote = 0;
   for (int thisNote = 0; thisNote < 8; thisNote++) {
-    // pin8 output the voice, every scale is 0.5 sencond
-    currentNote = melody[current - 1][thisNote];
+    currentNote = melody[songNumber - 1][thisNote];
+    checkForChange();
 
     if (melody[current - 1][thisNote] == 0) {
       customDelay(500);
     }
-    visuilizerPlayer(currentNote);
+    visualizerPlayer(currentNote);
     NewTone(BUZZER_PIN, currentNote, 500);
 
-    // Output the voice after several minutes
     customDelay(500);
   }
 }
@@ -280,22 +298,19 @@ void setup() {
   lcd.begin(16, 2);
   lcd.print("INITIALIZING...");
   irrecv.enableIRIn();
-  pinMode(latchPin, OUTPUT);
-  pinMode(dataPin, OUTPUT);
-  pinMode(clockPin, OUTPUT);
+  pinMode(LATCH_PIN, OUTPUT);
+  pinMode(DATA_PIN, OUTPUT);
+  pinMode(CLOCK_PIN, OUTPUT);
 }
 
 void loop() {
   IRdetect();
   if (power) {
     updateLCD();
-    playsong();
-
-    // TODO: make it switch to ultrasonic if current == 0
-    // if (current == 0) {
-    //   // playUltrasonic();
-    // } else {
-      
-    // }
+    if (current == 0) {
+      playUltrasonic();
+    } else {
+      playsong(current);
+    }
   }
 }
